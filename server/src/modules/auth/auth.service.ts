@@ -1,9 +1,9 @@
 import { MembershipRole } from "../../generated/prisma/enums.js";
 import { prisma } from "../../app/config/prisma.js";
 import { ApiError } from "../../app/utils/ApiError.js";
-import { compareHash, hashValue } from "../../app/utils/bcrypt.js";
-import { createToken, type JwtPayload, verifyToken } from "../../app/utils/jwt.js";
-import type { LoginPayload, RegisterPayload } from "./auth.interface.js";
+import { hashValue } from "../../app/utils/bcrypt.js";
+import { createToken, type JwtPayload } from "../../app/utils/jwt.js";
+import type { RegisterPayload } from "./auth.interface.js";
 
 const slugify = (value: string) => {
   return value
@@ -106,155 +106,6 @@ const register = async (payload: RegisterPayload) => {
   });
 };
 
-const login = async (payload: LoginPayload) => {
-  const user = await prisma.user.findUnique({
-    where: { email: payload.email },
-    include: {
-      memberships: {
-        include: {
-          organization: true,
-        },
-        orderBy: {
-          createdAt: "asc",
-        },
-      },
-    },
-  });
-
-  if (!user) {
-    throw new ApiError(401, "Invalid email or password");
-  }
-
-  const passwordMatched = await compareHash(payload.password, user.password);
-
-  if (!passwordMatched) {
-    throw new ApiError(401, "Invalid email or password");
-  }
-
-  const primaryMembership = user.memberships[0];
-
-  if (!primaryMembership) {
-    throw new ApiError(403, "User is not assigned to any organization");
-  }
-
-  const tokenPayload = {
-    userId: user.id,
-    email: user.email,
-    organizationId: primaryMembership.organizationId,
-    role: primaryMembership.role,
-  };
-  const { accessToken, refreshToken } = createAuthTokens(tokenPayload);
-
-  await prisma.user.update({
-    where: { id: user.id },
-    data: {
-      refreshToken: await hashValue(refreshToken),
-    },
-  });
-
-  return {
-    user: sanitizeUser(user),
-    organization: primaryMembership.organization,
-    accessToken,
-    refreshToken,
-  };
-};
-
-const refreshToken = async (token: string) => {
-  const decoded = verifyToken(token, process.env.JWT_REFRESH_SECRET || "");
-  const user = await prisma.user.findUnique({
-    where: { id: decoded.userId },
-    include: {
-      memberships: {
-        where: {
-          organizationId: decoded.organizationId,
-        },
-      },
-    },
-  });
-
-  if (!user || !user.refreshToken) {
-    throw new ApiError(401, "Invalid refresh token");
-  }
-
-  const tokenMatched = await compareHash(token, user.refreshToken);
-
-  if (!tokenMatched) {
-    throw new ApiError(401, "Invalid refresh token");
-  }
-
-  const membership = user.memberships[0];
-
-  if (!membership) {
-    throw new ApiError(403, "User no longer has access to this organization");
-  }
-
-  const tokenPayload = {
-    userId: user.id,
-    email: user.email,
-    organizationId: membership.organizationId,
-    role: membership.role,
-  };
-  const tokens = createAuthTokens(tokenPayload);
-
-  await prisma.user.update({
-    where: { id: user.id },
-    data: {
-      refreshToken: await hashValue(tokens.refreshToken),
-    },
-  });
-
-  return tokens;
-};
-
-const logout = async (userId: string) => {
-  await prisma.user.update({
-    where: { id: userId },
-    data: {
-      refreshToken: null,
-    },
-  });
-};
-
-const me = async (payload: JwtPayload) => {
-  const user = await prisma.user.findUnique({
-    where: { id: payload.userId },
-    include: {
-      memberships: {
-        where: {
-          organizationId: payload.organizationId,
-        },
-        include: {
-          organization: true,
-        },
-      },
-    },
-  });
-
-  if (!user) {
-    throw new ApiError(404, "User not found");
-  }
-
-  const membership = user.memberships[0];
-
-  if (!membership) {
-    throw new ApiError(403, "User no longer has access to this organization");
-  }
-
-  return {
-    user: sanitizeUser(user),
-    organization: membership.organization,
-    membership: {
-      id: membership.id,
-      role: membership.role,
-    },
-  };
-};
-
 export const AuthService = {
   register,
-  login,
-  refreshToken,
-  logout,
-  me,
 };

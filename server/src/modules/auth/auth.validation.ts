@@ -15,21 +15,6 @@ const registerSchema = z.object({
   }),
 });
 
-const loginSchema = z.object({
-  body: z.object({
-    email: z.email("Valid email is required").toLowerCase(),
-    password: z.string().min(1, "Password is required"),
-  }),
-});
-
-const refreshTokenSchema = z.object({
-  body: z.object({
-    refreshToken: z.string().min(1, "Refresh token is required").optional(),
-  }),
-});
-
 export const AuthValidation = {
   registerSchema,
-  loginSchema,
-  refreshTokenSchema,
 };
