@@ -13,18 +13,6 @@ const register = catchAsync(async (req, res) => {
   });
 });
 
-const notImplemented = catchAsync(async (_req, res) => {
-  sendResponse(res, {
-    statusCode: 501,
-    success: false,
-    message: AUTH_MESSAGES.NOT_IMPLEMENTED,
-  });
-});
-
 export const AuthController = {
   register,
-  login: notImplemented,
-  refreshToken: notImplemented,
-  logout: notImplemented,
-  me: notImplemented,
 };

@@ -1,8 +1,8 @@
 import { MembershipRole } from "../../generated/prisma/enums.js";
 import { prisma } from "../../app/config/prisma.js";
-import { AppError } from "../../app/errors/AppError.js";
-import { hashValue } from "../../app/utils/hash.js";
-import { createToken } from "../../app/utils/jwt.js";
+import { ApiError } from "../../app/utils/ApiError.js";
+import { hashValue } from "../../app/utils/bcrypt.js";
+import { createToken, type JwtPayload } from "../../app/utils/jwt.js";
 import type { RegisterPayload } from "./auth.interface.js";
 
 const slugify = (value: string) => {
@@ -26,13 +26,34 @@ const buildUniqueOrganizationSlug = async (organizationName: string) => {
   return slug;
 };
 
+const createAuthTokens = (payload: JwtPayload) => {
+  return {
+    accessToken: createToken(
+      payload,
+      process.env.JWT_ACCESS_SECRET || "",
+      process.env.JWT_ACCESS_EXPIRES_IN || "15m",
+    ),
+    refreshToken: createToken(
+      payload,
+      process.env.JWT_REFRESH_SECRET || "",
+      process.env.JWT_REFRESH_EXPIRES_IN || "7d",
+    ),
+  };
+};
+
+const sanitizeUser = (user: { id: string; name: string | null; email: string }) => ({
+  id: user.id,
+  name: user.name,
+  email: user.email,
+});
+
 const register = async (payload: RegisterPayload) => {
   const existingUser = await prisma.user.findUnique({
     where: { email: payload.email },
   });
 
   if (existingUser) {
-    throw new AppError(409, "User already exists with this email");
+    throw new ApiError(409, "User already exists with this email");
   }
 
   const password = await hashValue(payload.password);
@@ -68,16 +89,7 @@ const register = async (payload: RegisterPayload) => {
       organizationId: organization.id,
       role: MembershipRole.OWNER,
     };
-    const accessToken = createToken(
-      tokenPayload,
-      process.env.JWT_ACCESS_SECRET || "",
-      process.env.JWT_ACCESS_EXPIRES_IN || "15m",
-    );
-    const refreshToken = createToken(
-      tokenPayload,
-      process.env.JWT_REFRESH_SECRET || "",
-      process.env.JWT_REFRESH_EXPIRES_IN || "7d",
-    );
+    const { accessToken, refreshToken } = createAuthTokens(tokenPayload);
     const hashedRefreshToken = await hashValue(refreshToken);
 
     await tx.user.update({
@@ -86,11 +98,7 @@ const register = async (payload: RegisterPayload) => {
     });
 
     return {
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-      },
+      user: sanitizeUser(user),
       organization,
       accessToken,
       refreshToken,
