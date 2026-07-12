@@ -1,4 +1,7 @@
 export const AUTH_MESSAGES = {
   REGISTER_SUCCESS: "Registration successful",
-  NOT_IMPLEMENTED: "This auth endpoint is not implemented yet",
+  LOGIN_SUCCESS: "Login successful",
+  REFRESH_SUCCESS: "Token refreshed successfully",
+  LOGOUT_SUCCESS: "Logout successful",
+  ME_SUCCESS: "Authenticated user retrieved successfully",
 } as const;
