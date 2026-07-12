@@ -1,7 +1,7 @@
 import { MembershipRole } from "../../generated/prisma/enums.js";
 import { prisma } from "../../app/config/prisma.js";
-import { AppError } from "../../app/errors/AppError.js";
-import { compareHash, hashValue } from "../../app/utils/hash.js";
+import { ApiError } from "../../app/utils/ApiError.js";
+import { compareHash, hashValue } from "../../app/utils/bcrypt.js";
 import { createToken, type JwtPayload, verifyToken } from "../../app/utils/jwt.js";
 import type { LoginPayload, RegisterPayload } from "./auth.interface.js";
 
@@ -53,7 +53,7 @@ const register = async (payload: RegisterPayload) => {
   });
 
   if (existingUser) {
-    throw new AppError(409, "User already exists with this email");
+    throw new ApiError(409, "User already exists with this email");
   }
 
   const password = await hashValue(payload.password);
@@ -122,19 +122,19 @@ const login = async (payload: LoginPayload) => {
   });
 
   if (!user) {
-    throw new AppError(401, "Invalid email or password");
+    throw new ApiError(401, "Invalid email or password");
   }
 
   const passwordMatched = await compareHash(payload.password, user.password);
 
   if (!passwordMatched) {
-    throw new AppError(401, "Invalid email or password");
+    throw new ApiError(401, "Invalid email or password");
   }
 
   const primaryMembership = user.memberships[0];
 
   if (!primaryMembership) {
-    throw new AppError(403, "User is not assigned to any organization");
+    throw new ApiError(403, "User is not assigned to any organization");
   }
 
   const tokenPayload = {
@@ -174,19 +174,19 @@ const refreshToken = async (token: string) => {
   });
 
   if (!user || !user.refreshToken) {
-    throw new AppError(401, "Invalid refresh token");
+    throw new ApiError(401, "Invalid refresh token");
   }
 
   const tokenMatched = await compareHash(token, user.refreshToken);
 
   if (!tokenMatched) {
-    throw new AppError(401, "Invalid refresh token");
+    throw new ApiError(401, "Invalid refresh token");
   }
 
   const membership = user.memberships[0];
 
   if (!membership) {
-    throw new AppError(403, "User no longer has access to this organization");
+    throw new ApiError(403, "User no longer has access to this organization");
   }
 
   const tokenPayload = {
@@ -232,13 +232,13 @@ const me = async (payload: JwtPayload) => {
   });
 
   if (!user) {
-    throw new AppError(404, "User not found");
+    throw new ApiError(404, "User not found");
   }
 
   const membership = user.memberships[0];
 
   if (!membership) {
-    throw new AppError(403, "User no longer has access to this organization");
+    throw new ApiError(403, "User no longer has access to this organization");
   }
 
   return {

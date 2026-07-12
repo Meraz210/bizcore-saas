@@ -1,5 +1,5 @@
 import { prisma } from "../../app/config/prisma.js";
-import { AppError } from "../../app/errors/AppError.js";
+import { ApiError } from "../../app/utils/ApiError.js";
 import type { UpdateOrganizationPayload } from "./organization.interface.js";
 
 const getCurrent = async (organizationId: string) => {
@@ -8,7 +8,7 @@ const getCurrent = async (organizationId: string) => {
   });
 
   if (!organization) {
-    throw new AppError(404, "Organization not found");
+    throw new ApiError(404, "Organization not found");
   }
 
   return organization;
