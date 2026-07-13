@@ -34,7 +34,7 @@ model Organization {
 
 model Membership {
   id             String       @id @default(cuid())
-  role           MembershipRole @default(MEMBER)
+  role           MembershipRole @default(EMPLOYEE)
   userId         String
   organizationId String
   user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -48,5 +48,6 @@ model Membership {
 enum MembershipRole {
   OWNER
   ADMIN
-  MEMBER
+  MANAGER
+  EMPLOYEE
 }

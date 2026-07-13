@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import type { NextFunction, Request, Response } from "express";
+import { MembershipRole } from "../../generated/prisma/enums.js";
 import { prisma } from "../config/prisma.js";
 import { ApiError } from "../utils/ApiError.js";
 import { tenantMiddleware } from "./tenant.middleware.js";
@@ -57,7 +58,7 @@ test("rejects cross-tenant organization access before business handlers run", as
       userId: "user-a",
       email: "a@example.com",
       organizationId: "org-b",
-      role: "MEMBER",
+      role: MembershipRole.EMPLOYEE,
     },
   });
 
@@ -84,7 +85,7 @@ test("uses authenticated tenant context instead of client-supplied organizationI
       userId: "user-a",
       email: "a@example.com",
       organizationId: "org-a",
-      role: "MEMBER",
+      role: MembershipRole.EMPLOYEE,
     },
   };
 
@@ -96,4 +97,25 @@ test("uses authenticated tenant context instead of client-supplied organizationI
   assert.equal(req.role, "OWNER");
   assert.equal(req.user?.organizationId, "org-a");
   assert.notEqual(req.organizationId, req.body.organizationId);
+});
+
+test("cross-tenant role update fails before authorization is evaluated", async () => {
+  membershipDelegate.findUnique = async () => null;
+
+  const { nextCalled, nextError } = await runTenantMiddleware({
+    body: {
+      targetUserId: "user-b",
+      role: MembershipRole.OWNER,
+    },
+    user: {
+      userId: "user-a",
+      email: "a@example.com",
+      organizationId: "org-b",
+      role: MembershipRole.ADMIN,
+    },
+  });
+
+  assert.equal(nextCalled, true);
+  assert.equal(nextError instanceof ApiError, true);
+  assert.equal((nextError as ApiError).statusCode, 403);
 });

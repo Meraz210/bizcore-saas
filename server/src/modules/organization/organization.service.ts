@@ -108,7 +108,7 @@ const updateCurrentOrganization = async (
     throw new ApiError(403, "You do not have access to this organization");
   }
 
-  if (!["OWNER", "ADMIN"].includes(membership.role)) {
+  if (membership.role !== "OWNER") {
     throw new ApiError(403, "You are not allowed to update this organization");
   }
 
