@@ -253,8 +253,44 @@ const refreshToken = async (token?: string) => {
   };
 };
 
+const logout = async (token?: string) => {
+  if (!token) {
+    throw new ApiError(401, "Refresh token is required");
+  }
+
+  let decodedToken: JwtPayload;
+
+  try {
+    decodedToken = verifyToken(token, process.env.JWT_REFRESH_SECRET || "");
+  } catch {
+    throw new ApiError(401, "Invalid refresh token");
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: decodedToken.userId },
+  });
+
+  if (!user || !user.refreshToken) {
+    throw new ApiError(401, "Invalid refresh token");
+  }
+
+  const isRefreshTokenMatched = await compareHash(token, user.refreshToken);
+
+  if (!isRefreshTokenMatched) {
+    throw new ApiError(401, "Invalid refresh token");
+  }
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { refreshToken: null },
+  });
+
+  return null;
+};
+
 export const AuthService = {
   register,
   login,
   refreshToken,
+  logout,
 };

@@ -52,8 +52,23 @@ const refreshToken = catchAsync(async (req, res) => {
   });
 });
 
+const logout = catchAsync(async (req, res) => {
+  await AuthService.logout(getRefreshTokenFromRequest(req));
+  res.clearCookie("refreshToken", {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+  });
+
+  sendResponse(res, {
+    message: AUTH_MESSAGES.LOGOUT_SUCCESS,
+    data: null,
+  });
+});
+
 export const AuthController = {
   register,
   login,
   refreshToken,
+  logout,
 };
