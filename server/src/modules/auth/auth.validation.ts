@@ -15,6 +15,14 @@ const registerSchema = z.object({
   }),
 });
 
+const loginSchema = z.object({
+  body: z.object({
+    email: z.email("Valid email is required").toLowerCase(),
+    password: z.string().min(1, "Password is required"),
+  }),
+});
+
 export const AuthValidation = {
   registerSchema,
+  loginSchema,
 };
