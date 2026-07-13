@@ -19,6 +19,9 @@ model User {
   name         String?
   refreshToken String?
   memberships  Membership[]
+  clients      Client[]
+  projects     Project[]
+  projectMembers ProjectMember[]
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 }
@@ -28,13 +31,15 @@ model Organization {
   name        String
   slug        String       @unique
   memberships Membership[]
+  clients     Client[]
+  projects    Project[]
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 }
 
 model Membership {
   id             String       @id @default(cuid())
-  role           MembershipRole @default(MEMBER)
+  role           MembershipRole @default(EMPLOYEE)
   userId         String
   organizationId String
   user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -45,8 +50,81 @@ model Membership {
   @@unique([userId, organizationId])
 }
 
+model Client {
+  id             String       @id @default(cuid())
+  name           String
+  email          String?
+  phone          String?
+  companyName    String?
+  address        String?
+  status         ClientStatus @default(ACTIVE)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdById    String
+  createdBy      User         @relation(fields: [createdById], references: [id])
+  projects       Project[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId])
+}
+
+model Project {
+  id             String          @id @default(cuid())
+  name           String
+  description    String?
+  status         ProjectStatus   @default(PLANNED)
+  startDate      DateTime?
+  endDate        DateTime?
+  organizationId String
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  clientId       String?
+  client         Client?         @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  createdById    String
+  createdBy      User            @relation(fields: [createdById], references: [id])
+  members        ProjectMember[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@index([organizationId])
+  @@index([clientId])
+}
+
+model ProjectMember {
+  id        String            @id @default(cuid())
+  projectId String
+  userId    String
+  role      ProjectMemberRole @default(MEMBER)
+  project   Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  @@unique([projectId, userId])
+  @@index([userId])
+}
+
 enum MembershipRole {
   OWNER
   ADMIN
+  MANAGER
+  EMPLOYEE
+}
+
+enum ClientStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum ProjectStatus {
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum ProjectMemberRole {
+  MANAGER
   MEMBER
+  VIEWER
 }

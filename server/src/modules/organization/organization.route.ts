@@ -1,5 +1,7 @@
 import { Router } from "express";
+import { MembershipRole } from "../../generated/prisma/enums.js";
 import { auth } from "../../app/middlewares/auth.js";
+import { authorize } from "../../app/middlewares/authorize.js";
 import { tenantMiddleware } from "../../app/middlewares/tenant.middleware.js";
 import { validateRequest } from "../../app/middlewares/validateRequest.js";
 import { OrganizationController } from "./organization.controller.js";
@@ -13,6 +15,7 @@ organizationRouter.patch(
   "/current",
   auth,
   tenantMiddleware,
+  authorize(MembershipRole.OWNER),
   validateRequest(OrganizationValidation.updateCurrentOrganizationSchema),
   OrganizationController.updateCurrentOrganization,
 );
