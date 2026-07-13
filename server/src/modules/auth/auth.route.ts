@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { auth } from "../../app/middlewares/auth.js";
 import { validateRequest } from "../../app/middlewares/validateRequest.js";
 import { AuthController } from "./auth.controller.js";
 import { AuthValidation } from "./auth.validation.js";
@@ -16,3 +17,5 @@ authRouter.post("/login", validateRequest(AuthValidation.loginSchema), AuthContr
 authRouter.post("/refresh-token", AuthController.refreshToken);
 
 authRouter.post("/logout", AuthController.logout);
+
+authRouter.get("/me", auth, AuthController.me);

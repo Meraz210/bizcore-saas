@@ -12,7 +12,12 @@ export const auth = (req: Request, _res: Response, next: NextFunction) => {
       throw new ApiError(401, "Authentication token is required");
     }
 
-    req.user = verifyToken(token, process.env.JWT_ACCESS_SECRET || "");
+    try {
+      req.user = verifyToken(token, process.env.JWT_ACCESS_SECRET || "");
+    } catch {
+      throw new ApiError(401, "Invalid authentication token");
+    }
+
     next();
   } catch (error) {
     next(error);

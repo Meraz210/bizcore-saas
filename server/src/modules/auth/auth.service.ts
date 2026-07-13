@@ -288,9 +288,48 @@ const logout = async (token?: string) => {
   return null;
 };
 
+const getCurrentUser = async (userId: string) => {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      createdAt: true,
+      updatedAt: true,
+      memberships: {
+        select: {
+          id: true,
+          role: true,
+          organizationId: true,
+          createdAt: true,
+          updatedAt: true,
+          organization: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+          },
+        },
+        orderBy: { createdAt: "asc" },
+      },
+    },
+  });
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+
+  return user;
+};
+
 export const AuthService = {
   register,
   login,
   refreshToken,
   logout,
+  getCurrentUser,
 };

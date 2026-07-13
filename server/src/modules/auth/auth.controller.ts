@@ -1,4 +1,5 @@
 import type { Request } from "express";
+import { ApiError } from "../../app/utils/ApiError.js";
 import { catchAsync } from "../../app/utils/catchAsync.js";
 import { sendResponse } from "../../app/utils/sendResponse.js";
 import { AUTH_MESSAGES } from "./auth.constant.js";
@@ -66,9 +67,23 @@ const logout = catchAsync(async (req, res) => {
   });
 });
 
+const me = catchAsync(async (req, res) => {
+  if (!req.user) {
+    throw new ApiError(401, "Authentication token is required");
+  }
+
+  const result = await AuthService.getCurrentUser(req.user.userId);
+
+  sendResponse(res, {
+    message: AUTH_MESSAGES.CURRENT_USER_SUCCESS,
+    data: result,
+  });
+});
+
 export const AuthController = {
   register,
   login,
   refreshToken,
   logout,
+  me,
 };
