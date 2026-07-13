@@ -13,6 +13,16 @@ const register = catchAsync(async (req, res) => {
   });
 });
 
+const login = catchAsync(async (req, res) => {
+  const result = await AuthService.login(req.body);
+
+  sendResponse(res, {
+    message: AUTH_MESSAGES.LOGIN_SUCCESS,
+    data: result,
+  });
+});
+
 export const AuthController = {
   register,
+  login,
 };

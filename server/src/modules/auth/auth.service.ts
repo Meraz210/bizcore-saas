@@ -1,9 +1,11 @@
+import { randomUUID } from "node:crypto";
 import { MembershipRole } from "../../generated/prisma/enums.js";
+import { Prisma } from "../../generated/prisma/client.js";
 import { prisma } from "../../app/config/prisma.js";
 import { ApiError } from "../../app/utils/ApiError.js";
-import { hashValue } from "../../app/utils/bcrypt.js";
+import { compareHash, hashValue } from "../../app/utils/bcrypt.js";
 import { createToken, type JwtPayload } from "../../app/utils/jwt.js";
-import type { RegisterPayload } from "./auth.interface.js";
+import type { LoginPayload, RegisterPayload } from "./auth.interface.js";
 
 const slugify = (value: string) => {
   return value
@@ -13,17 +15,22 @@ const slugify = (value: string) => {
     .replace(/(^-|-$)/g, "");
 };
 
-const buildUniqueOrganizationSlug = async (organizationName: string) => {
+const buildUniqueOrganizationSlug = async (organizationName: string, forceSuffix = false) => {
   const baseSlug = slugify(organizationName) || "organization";
-  let slug = baseSlug;
-  let count = 1;
 
-  while (await prisma.organization.findUnique({ where: { slug } })) {
-    count += 1;
-    slug = `${baseSlug}-${count}`;
+  if (forceSuffix) {
+    return `${baseSlug}-${randomUUID().slice(0, 8)}`;
   }
 
-  return slug;
+  const existingOrganization = await prisma.organization.findUnique({
+    where: { slug: baseSlug },
+  });
+
+  if (!existingOrganization) {
+    return baseSlug;
+  }
+
+  return `${baseSlug}-${randomUUID().slice(0, 8)}`;
 };
 
 const createAuthTokens = (payload: JwtPayload) => {
@@ -47,18 +54,11 @@ const sanitizeUser = (user: { id: string; name: string | null; email: string }) 
   email: user.email,
 });
 
-const register = async (payload: RegisterPayload) => {
-  const existingUser = await prisma.user.findUnique({
-    where: { email: payload.email },
-  });
-
-  if (existingUser) {
-    throw new ApiError(409, "User already exists with this email");
-  }
-
-  const password = await hashValue(payload.password);
-  const organizationSlug = await buildUniqueOrganizationSlug(payload.organizationName);
-
+const runRegistrationTransaction = async (
+  payload: RegisterPayload,
+  password: string,
+  organizationSlug: string,
+) => {
   return prisma.$transaction(async (tx) => {
     const user = await tx.user.create({
       data: {
@@ -106,6 +106,95 @@ const register = async (payload: RegisterPayload) => {
   });
 };
 
+const getUniqueConstraintTarget = (error: Prisma.PrismaClientKnownRequestError) => {
+  const target = error.meta?.target;
+
+  return Array.isArray(target) ? target.join(",") : String(target || "");
+};
+
+const register = async (payload: RegisterPayload) => {
+  const existingUser = await prisma.user.findUnique({
+    where: { email: payload.email },
+  });
+
+  if (existingUser) {
+    throw new ApiError(409, "User already exists with this email");
+  }
+
+  const password = await hashValue(payload.password);
+
+  try {
+    const organizationSlug = await buildUniqueOrganizationSlug(payload.organizationName);
+    return await runRegistrationTransaction(payload, password, organizationSlug);
+  } catch (error) {
+    if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") {
+      throw error;
+    }
+
+    const target = getUniqueConstraintTarget(error);
+
+    if (target.includes("email")) {
+      throw new ApiError(409, "User already exists with this email");
+    }
+
+    if (target.includes("slug")) {
+      const organizationSlug = await buildUniqueOrganizationSlug(payload.organizationName, true);
+      return runRegistrationTransaction(payload, password, organizationSlug);
+    }
+
+    throw new ApiError(409, "User or organization already exists");
+  }
+};
+
+const login = async (payload: LoginPayload) => {
+  const user = await prisma.user.findUnique({
+    where: { email: payload.email },
+    include: {
+      memberships: {
+        orderBy: { createdAt: "asc" },
+        take: 1,
+      },
+    },
+  });
+
+  if (!user) {
+    throw new ApiError(401, "Invalid email or password");
+  }
+
+  const isPasswordMatched = await compareHash(payload.password, user.password);
+
+  if (!isPasswordMatched) {
+    throw new ApiError(401, "Invalid email or password");
+  }
+
+  const membership = user.memberships[0];
+
+  if (!membership) {
+    throw new ApiError(403, "User is not assigned to any organization");
+  }
+
+  const tokenPayload = {
+    userId: user.id,
+    email: user.email,
+    organizationId: membership.organizationId,
+    role: membership.role,
+  };
+  const { accessToken, refreshToken } = createAuthTokens(tokenPayload);
+  const hashedRefreshToken = await hashValue(refreshToken);
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { refreshToken: hashedRefreshToken },
+  });
+
+  return {
+    accessToken,
+    refreshToken,
+    user: sanitizeUser(user),
+  };
+};
+
 export const AuthService = {
   register,
+  login,
 };
