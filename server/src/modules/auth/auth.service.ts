@@ -4,7 +4,7 @@ import { Prisma } from "../../generated/prisma/client.js";
 import { prisma } from "../../app/config/prisma.js";
 import { ApiError } from "../../app/utils/ApiError.js";
 import { compareHash, hashValue } from "../../app/utils/bcrypt.js";
-import { createToken, type JwtPayload } from "../../app/utils/jwt.js";
+import { createToken, type JwtPayload, verifyToken } from "../../app/utils/jwt.js";
 import type { LoginPayload, RegisterPayload } from "./auth.interface.js";
 
 const slugify = (value: string) => {
@@ -194,7 +194,67 @@ const login = async (payload: LoginPayload) => {
   };
 };
 
+const refreshToken = async (token?: string) => {
+  if (!token) {
+    throw new ApiError(401, "Refresh token is required");
+  }
+
+  let decodedToken: JwtPayload;
+
+  try {
+    decodedToken = verifyToken(token, process.env.JWT_REFRESH_SECRET || "");
+  } catch {
+    throw new ApiError(401, "Invalid refresh token");
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: decodedToken.userId },
+    include: {
+      memberships: {
+        where: { organizationId: decodedToken.organizationId },
+        take: 1,
+      },
+    },
+  });
+
+  if (!user || !user.refreshToken) {
+    throw new ApiError(401, "Invalid refresh token");
+  }
+
+  const isRefreshTokenMatched = await compareHash(token, user.refreshToken);
+
+  if (!isRefreshTokenMatched) {
+    throw new ApiError(401, "Invalid refresh token");
+  }
+
+  const membership = user.memberships[0];
+
+  if (!membership) {
+    throw new ApiError(403, "User is not assigned to this organization");
+  }
+
+  const tokenPayload = {
+    userId: user.id,
+    email: user.email,
+    organizationId: membership.organizationId,
+    role: membership.role,
+  };
+  const { accessToken, refreshToken: newRefreshToken } = createAuthTokens(tokenPayload);
+  const hashedRefreshToken = await hashValue(newRefreshToken);
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { refreshToken: hashedRefreshToken },
+  });
+
+  return {
+    accessToken,
+    refreshToken: newRefreshToken,
+  };
+};
+
 export const AuthService = {
   register,
   login,
+  refreshToken,
 };
