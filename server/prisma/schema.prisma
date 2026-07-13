@@ -19,6 +19,7 @@ model User {
   name         String?
   refreshToken String?
   memberships  Membership[]
+  clients      Client[]
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 }
@@ -28,6 +29,7 @@ model Organization {
   name        String
   slug        String       @unique
   memberships Membership[]
+  clients     Client[]
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 }
@@ -45,9 +47,32 @@ model Membership {
   @@unique([userId, organizationId])
 }
 
+model Client {
+  id             String       @id @default(cuid())
+  name           String
+  email          String?
+  phone          String?
+  companyName    String?
+  address        String?
+  status         ClientStatus @default(ACTIVE)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdById    String
+  createdBy      User         @relation(fields: [createdById], references: [id])
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId])
+}
+
 enum MembershipRole {
   OWNER
   ADMIN
   MANAGER
   EMPLOYEE
+}
+
+enum ClientStatus {
+  ACTIVE
+  INACTIVE
 }
