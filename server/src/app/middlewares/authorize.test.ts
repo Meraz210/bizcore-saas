@@ -75,6 +75,17 @@ test("EMPLOYEE cannot create client", () => {
   assert.equal((nextError as ApiError).statusCode, 403);
 });
 
+test("EMPLOYEE cannot create project", () => {
+  const { nextCalled, nextError } = runAuthorize(
+    [MembershipRole.OWNER, MembershipRole.ADMIN, MembershipRole.MANAGER],
+    buildRequest(MembershipRole.EMPLOYEE),
+  );
+
+  assert.equal(nextCalled, true);
+  assert.equal(nextError instanceof ApiError, true);
+  assert.equal((nextError as ApiError).statusCode, 403);
+});
+
 test("MANAGER cannot change roles", () => {
   const { nextCalled, nextError } = runAuthorize(
     [MembershipRole.OWNER, MembershipRole.ADMIN],
